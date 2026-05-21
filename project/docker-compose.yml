@@ -1,0 +1,187 @@
+version: "3.9"
+
+# =============================================================================
+# RiskGuard — 实时交易风控系统
+# Docker Compose 完整配置（Confluent Platform 7.x，KRaft 模式）
+# =============================================================================
+
+networks:
+  riskguard-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Apache Kafka（KRaft 模式，无需 ZooKeeper）
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: riskguard-kafka
+    hostname: kafka
+    networks:
+      - riskguard-net
+    ports:
+      - "9092:9092"   # 外部访问（宿主机）
+      - "9101:9101"   # JMX 指标
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      # ── KRaft 节点身份 ──────────────────────────────────────────────────────
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+
+      # ── 监听地址 ────────────────────────────────────────────────────────────
+      # PLAINTEXT      → 容器内部服务之间通信（29092）
+      # PLAINTEXT_HOST → 宿主机访问（9092）
+      # CONTROLLER     → KRaft 控制器间通信（29093）
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://kafka:29093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      # ── 集群 ID（KRaft 必须提供，生产环境请用 kafka-storage 生成）────────
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+
+      # ── Topic 默认配置 ──────────────────────────────────────────────────────
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1          # 单节点开发环境
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_LOG_RETENTION_HOURS: 168               # 7 天
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824          # 1 GB
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+
+      # ── 性能调优 ────────────────────────────────────────────────────────────
+      KAFKA_MESSAGE_MAX_BYTES: 10485760            # 10 MB
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
+      KAFKA_COMPRESSION_TYPE: "snappy"
+
+      # ── JMX 监控 ────────────────────────────────────────────────────────────
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+
+      # ── 日志格式（KRaft 必须） ─────────────────────────────────────────────
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: "ERROR"
+
+      # ── 内部 Topic 副本 ──────────────────────────────────────────────────────
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Confluent Schema Registry
+  # ---------------------------------------------------------------------------
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    container_name: riskguard-schema-registry
+    hostname: schema-registry
+    networks:
+      - riskguard-net
+    ports:
+      - "8081:8081"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "_schemas"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: "WARN"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Kafka UI（Provectus）— 可视化管理控制台
+  # ---------------------------------------------------------------------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: riskguard-kafka-ui
+    hostname: kafka-ui
+    networks:
+      - riskguard-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "riskguard-local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:29092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8081"
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9101
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — 时序指标收集
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: riskguard-prometheus
+    hostname: prometheus
+    networks:
+      - riskguard-net
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Grafana — 可视化仪表盘
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: riskguard-grafana
+    hostname: grafana
+    networks:
+      - riskguard-net
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "riskguard123"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_LOG_LEVEL: "warn"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

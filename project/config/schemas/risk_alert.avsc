@@ -1,0 +1,113 @@
+{
+  "type": "record",
+  "name": "RiskAlert",
+  "namespace": "com.riskguard.events",
+  "doc": "风险告警事件 Schema — RiskGuard 实时风控系统",
+  "fields": [
+    {
+      "name": "alert_id",
+      "type": "string",
+      "doc": "告警唯一标识符（UUID v4）"
+    },
+    {
+      "name": "trade_id",
+      "type": "string",
+      "doc": "触发告警的原始交易 ID"
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "doc": "涉及账户 ID"
+    },
+    {
+      "name": "alert_type",
+      "type": {
+        "type": "enum",
+        "name": "AlertType",
+        "symbols": [
+          "LARGE_TRADE",
+          "HIGH_FREQUENCY",
+          "PRICE_ANOMALY",
+          "MULTI_RULE"
+        ],
+        "doc": "告警类型枚举"
+      },
+      "doc": "触发的风控规则类型"
+    },
+    {
+      "name": "severity",
+      "type": {
+        "type": "enum",
+        "name": "AlertSeverity",
+        "symbols": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+        "doc": "告警严重程度"
+      },
+      "doc": "告警严重程度"
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "doc": "告警详细描述（人类可读）"
+    },
+    {
+      "name": "trade_total_value_cad",
+      "type": "double",
+      "doc": "触发告警的交易金额（CAD）"
+    },
+    {
+      "name": "asset_pair",
+      "type": "string",
+      "doc": "涉及资产对"
+    },
+    {
+      "name": "alert_timestamp_ms",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "告警生成时间（Unix 毫秒时间戳）"
+    },
+    {
+      "name": "trade_timestamp_ms",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "原始交易时间"
+    },
+    {
+      "name": "rule_details",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "触发规则的详细参数（例：threshold=50000, actual=75000）"
+    },
+    {
+      "name": "recommended_action",
+      "type": {
+        "type": "enum",
+        "name": "RecommendedAction",
+        "symbols": [
+          "MONITOR",
+          "REVIEW",
+          "FREEZE_ACCOUNT",
+          "BLOCK_TRADE",
+          "ESCALATE"
+        ],
+        "doc": "建议处置动作"
+      },
+      "default": "MONITOR",
+      "doc": "系统建议的处置动作"
+    },
+    {
+      "name": "is_resolved",
+      "type": "boolean",
+      "default": false,
+      "doc": "告警是否已处置（用于 Log Compaction 场景）"
+    },
+    {
+      "name": "resolved_by",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "处置人员 ID（可选）"
+    }
+  ]
+}

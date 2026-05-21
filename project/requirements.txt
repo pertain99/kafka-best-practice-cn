@@ -1,0 +1,24 @@
+# RiskGuard — 依赖清单
+# 安装：pip install -r requirements.txt
+
+# ── Kafka 客户端（Confluent 官方 Python 客户端）──────────────────────────────
+confluent-kafka==2.3.0          # Kafka Producer/Consumer/AdminClient
+fastavro==1.9.4                 # Avro 序列化/反序列化
+
+# ── HTTP 客户端（Schema Registry REST API）──────────────────────────────────
+requests==2.31.0
+
+# ── 监控指标（Prometheus）────────────────────────────────────────────────────
+prometheus-client==0.19.0       # 暴露 /metrics 端点
+
+# ── 终端 UI（可选，alert_dashboard.py 使用）─────────────────────────────────
+rich==13.7.0                    # 彩色表格/进度条（可选，缺失时回退 ANSI）
+
+# ── 测试框架 ──────────────────────────────────────────────────────────────────
+pytest==7.4.0                   # 单元测试运行器
+pytest-cov==4.1.0               # 代码覆盖率报告
+
+# ── 开发工具（可选）──────────────────────────────────────────────────────────
+# black==23.12.0                # 代码格式化
+# isort==5.13.2                 # import 排序
+# mypy==1.8.0                   # 类型检查

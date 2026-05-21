@@ -1,0 +1,86 @@
+{
+  "type": "record",
+  "name": "Trade",
+  "namespace": "com.riskguard.events",
+  "doc": "加密货币交易事件 Schema — RiskGuard 实时风控系统",
+  "fields": [
+    {
+      "name": "trade_id",
+      "type": "string",
+      "doc": "交易唯一标识符（UUID v4）"
+    },
+    {
+      "name": "account_id",
+      "type": "string",
+      "doc": "账户唯一标识符（格式：ACC-XXXXXX）"
+    },
+    {
+      "name": "asset_pair",
+      "type": "string",
+      "doc": "交易资产对（例：BTC-CAD、ETH-CAD）"
+    },
+    {
+      "name": "side",
+      "type": {
+        "type": "enum",
+        "name": "TradeSide",
+        "symbols": ["BUY", "SELL"],
+        "doc": "买入或卖出"
+      },
+      "doc": "交易方向"
+    },
+    {
+      "name": "quantity",
+      "type": "double",
+      "doc": "交易数量（基础资产，例：0.5 BTC）"
+    },
+    {
+      "name": "price_cad",
+      "type": "double",
+      "doc": "成交价格（CAD 加元）"
+    },
+    {
+      "name": "total_value_cad",
+      "type": "double",
+      "doc": "交易总金额（CAD）= quantity × price_cad"
+    },
+    {
+      "name": "market_price_cad",
+      "type": "double",
+      "doc": "提交交易时的市场参考价（CAD），用于价格异常检测"
+    },
+    {
+      "name": "timestamp_ms",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "交易发生时间（Unix 毫秒时间戳）"
+    },
+    {
+      "name": "exchange_id",
+      "type": "string",
+      "default": "RISKGUARD-EXCHANGE",
+      "doc": "交易所标识符"
+    },
+    {
+      "name": "ip_address",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "发起交易的客户端 IP（可选，用于地理位置风控）"
+    },
+    {
+      "name": "user_agent",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "客户端 User-Agent（可选，用于设备指纹识别）"
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "附加元数据（键值对，用于扩展字段）"
+    }
+  ]
+}
